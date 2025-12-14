@@ -1,10 +1,10 @@
 # hyprvibr
 
 No-effort Hyprland plugin for achieving the same "vibrant" color effect to X11
-libvibrant and Windows VibranceGUI utility. This tool will change the Color
-Transformation Matrix (CTM) dynamically of a monitor where a window that is tracked
-and focused by the plugin is displayed, and will clean up the CTM configuration
-of the monitor when the window is no longer focused.
+libvibrant and Windows VibranceGUI utility. This tool will dynamically change the Color
+Transformation Matrix (CTM) and optionally the resolution of a monitor where a window
+that is tracked and focused by the plugin is displayed, and will restore the original
+settings when the window is no longer focused.
 
 ## Configuration
 
@@ -12,17 +12,26 @@ of the monitor when the window is no longer focused.
 plugin {
     hyprvibr {
       hyprvibr-app = <app initial class>, <saturation value>
+      hyprvibr-app = <app initial class>, <saturation value>, <width>, <height>
+      hyprvibr-app = <app initial class>, <saturation value>, <width>, <height>, <refresh rate>
       hyprvibr-app = ...
     }
 }
 ```
 
-For example:
+### Examples
 
 ```
 plugin {
     hyprvibr {
+      # Just saturation
       hyprvibr-app = cs2, 3.3
+
+      # Saturation + resolution
+      hyprvibr-app = cs2, 1.5, 1920, 1080
+
+      # Saturation + resolution + refresh rate
+      hyprvibr-app = cs2, 1.2, 2560, 1440, 144
     }
 }
 ```
