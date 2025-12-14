@@ -1,6 +1,9 @@
 [repository]
 name = "hyprvibr"
 authors = ["devcexx"]
+commit_pins = [
+    ["386376400119dd46a767c9f8c8791fd22c7b6e61", "803ee2b24005d9dbc75a1e97dda49b8a62fb683b"], # 0.52.2
+]
 
 [hyprvibr]
 description = "A plugin to customize monitor saturation per focused window"

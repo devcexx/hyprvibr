@@ -1,14 +1,15 @@
-#include "src/Compositor.hpp"
-#include "src/SharedDefs.hpp"
-#include "src/debug/Log.hpp"
-#include "src/desktop/DesktopTypes.hpp"
-#include "src/helpers/Monitor.hpp"
-#include "src/plugins/PluginAPI.hpp"
-#include "src/protocols/core/Compositor.hpp"
+#include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/SharedDefs.hpp>
+#include <hyprland/src/debug/Log.hpp>
+#include <hyprland/src/desktop/DesktopTypes.hpp>
+#include <hyprland/src/helpers/Monitor.hpp>
+#include <hyprland/src/plugins/PluginAPI.hpp>
+#include <hyprland/src/protocols/core/Compositor.hpp>
+#include <hyprland/src/desktop/state/FocusState.hpp>
 #include <any>
 #include <array>
 #include <hyprutils/string/ConstVarList.hpp>
-#include "src/desktop/Window.hpp"
+#include <hyprland/src/desktop/view/Window.hpp>
 
 #include "globals.hpp"
 
@@ -106,7 +107,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     });
 
     static auto P3 = HyprlandAPI::registerCallbackDynamic(PHANDLE, "configReloaded", [&](void* self, SCallbackInfo& info, std::any data) {
-        onActiveWindowChange(g_pCompositor->m_lastWindow.lock());
+        onActiveWindowChange(Desktop::focusState()->window());
     });
 
     HyprlandAPI::addConfigKeyword(
