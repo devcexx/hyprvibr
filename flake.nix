@@ -2,7 +2,7 @@
   description = "No effort libvibrant-like plugin for Hyprland";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     hyprland.url = "github:hyprwm/Hyprland";
   };
 
@@ -21,6 +21,10 @@
       pkgsFor = nixpkgs.legacyPackages;
     in
     {
+      checks = eachSystem (system: {
+        build = self.packages.${system}.hyprvibr;
+      });
+
       packages = eachSystem (system: {
         default = self.packages.${system}.hyprvibr;
         hyprvibr =
@@ -51,7 +55,7 @@
               runHook preInstall
 
               mkdir -p "$out/lib"
-              cp -r out/hyprvibr.so "$out/lib/lib${name}.so"
+              cp out/hyprvibr.so "$out/lib/lib${name}.so"
 
               runHook postInstall
             '';
