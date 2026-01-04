@@ -8,7 +8,7 @@ commit_pins = [
 [hyprvibr]
 description = "A plugin to customize monitor saturation per focused window"
 authors = ["devcexx"]
-output = "hyprvibr.so"
+output = "out/hyprvibr.so"
 build = [
     "make",
 ]
