@@ -10,10 +10,18 @@
 #include <array>
 #include <format>
 #include <hyprutils/string/ConstVarList.hpp>
+#include <hyprutils/utils/ScopeGuard.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/config/shared/monitor/MonitorRule.hpp>
-
+#include <hyprland/src/config/shared/monitor/MonitorRuleManager.hpp>
+#include <hyprland/src/config/ConfigManager.hpp>
+#include <hyprland/src/config/lua/bindings/LuaBindingsInternal.hpp>
+#include <luaconf.h>
 #include "globals.hpp"
+
+extern "C" {
+#include <lua.h>
+}
 
 using namespace Hyprutils::String;
 
@@ -57,8 +65,110 @@ const Mat3x3 calc_ctm_matrix(float sat) {
     return mat;
 }
 
-static std::string buildMonitorCommand(const std::string& name, int resX, int resY, float refreshRate, const Vector2D& offset, float scale) {
-    return std::format("{},{}x{}@{},{}x{},{}", name, resX, resY, refreshRate, (int)offset.x, (int)offset.y, scale);
+static void pushAppConfig(SAppConfig cfg) {
+    Log::logger->log(Log::INFO, "[hyprvibr] Configuration added for class {}: sat {}, res {}x{}@{}", cfg.szClass, cfg.sat, cfg.resX, cfg.resY, cfg.refreshRate);
+    g_appConfigs.emplace_back(std::move(cfg));
+}
+
+static int fillLuaMonitorMode(lua_State* L, SAppConfig& config) {
+    if (!lua_istable(L, -1)) {
+        Log::logger->log(Log::ERR, "[hyprvibr] Is not a table");
+        return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field, if specified, must be a table");
+    }
+
+    Log::logger->log(Log::ERR, "[hyprvibr] Type: {}", lua_type(L, 1));
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+
+        lua_getfield(L, -1, "w");
+        if (!lua_isnil(L, -1)) {
+            if (!lua_isinteger(L, -1)) {
+                return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: 'w' field must be an integer");
+            }
+            config.resX = lua_tointeger(L, -1);
+            if (config.resX < 0) {
+                return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: 'w' field must be non-negative");
+            }
+        }
+    }
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+
+        lua_getfield(L, -1, "h");
+        if (!lua_isnil(L, -1)) {
+            if (!lua_isinteger(L, -1)) {
+                return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: 'h' field must be an integer");
+            }
+
+            config.resY = lua_tointeger(L, -1);
+            if (config.resY < 0) {
+                return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: 'h' field must be non-negative");
+            }
+        }
+    }
+
+    if (config.resY < 0 && config.resX >= 0 || config.resX < 0 && config.resY >= 0) {
+        return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: both 'w' and 'h' fields must be specified together");
+    }
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+        lua_getfield(L, -1, "refresh_rate");
+        if (!lua_isnil(L, -1)) {
+            if (!lua_isnumber(L, -1)) {
+                return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field: 'refresh_rate' field must be a number");
+            }
+            config.refreshRate = (float)lua_tonumber(L, -1);
+        }
+    }
+
+    return 0;
+}
+
+static int luaAddApp(lua_State* L) {
+    if (!lua_istable(L, 1)) {
+        return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: a table is required");
+    }
+
+    SAppConfig config;
+    int r;
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+
+        lua_getfield(L, 1, "class");
+        if (!lua_isstring(L, -1)) {
+            return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'class' field must be a string");
+        }
+
+        config.szClass = lua_tostring(L, -1);
+    }
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+
+        lua_getfield(L, 1, "sat");
+        if (!lua_isnumber(L, -1)) {
+            return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'sat' field must be a number");
+        }
+
+        config.sat = (float)lua_tonumber(L, -1);
+    }
+
+    {
+        Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
+        lua_getfield(L, 1, "monitor_mode");
+        if (!lua_isnil(L, -1)) {
+            Log::logger->log(Log::ERR, "[hyprvibr] Monitor mode is not nil");
+            if ((r = fillLuaMonitorMode(L, config)) != 0)
+                return r;
+        }
+    }
+
+    pushAppConfig(config);
+    return 0;
 }
 
 void onActiveWindowChange(const PHLWINDOW win) {
@@ -93,9 +203,7 @@ void onActiveWindowChange(const PHLWINDOW win) {
             prevMon->setCTM(Mat3x3::identity());
 
             if (g_originalMonitorRule.has_value()) {
-                auto cmd = buildMonitorCommand(prevMon->m_name, (int)g_originalMonitorRule->m_resolution.x, (int)g_originalMonitorRule->m_resolution.y,
-                                                g_originalMonitorRule->m_refreshRate, g_originalMonitorRule->m_offset, g_originalMonitorRule->m_scale);
-                HyprlandAPI::invokeHyprctlCommand("keyword", "monitor " + cmd);
+                Config::monitorRuleMgr()->add(std::move(g_originalMonitorRule.value()));
                 Log::logger->log(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
                 g_originalMonitorRule.reset();
             }
@@ -116,16 +224,15 @@ void onActiveWindowChange(const PHLWINDOW win) {
 
                 if (currentResX != CONFIG->resX || currentResY != CONFIG->resY) {
                     float refreshRate = CONFIG->refreshRate > 0 ? CONFIG->refreshRate : 60.0f;
-                    auto cmd = buildMonitorCommand(newMon->m_name, CONFIG->resX, CONFIG->resY, refreshRate,
-                                                    newMon->m_activeMonitorRule.m_offset, newMon->m_activeMonitorRule.m_scale);
-                    HyprlandAPI::invokeHyprctlCommand("keyword", "monitor " + cmd);
-                    Log::logger->log(Log::INFO, "[hyprvibr] Changed resolution to {}x{}@{} on {}", CONFIG->resX, CONFIG->resY, refreshRate, newMon->m_name);
+                    Config::CMonitorRule newRule = newMon->m_activeMonitorRule;
+                    newRule.m_resolution = Vector2D((float)CONFIG->resX, (float)CONFIG->resY);
+                    newRule.m_refreshRate = refreshRate;
+                    Config::monitorRuleMgr()->add(std::move(newRule));
+                    Log::logger->log(Log::INFO, "[hyprvibr] Scheduled monitor resolution change to {}x{}@{} on {}", CONFIG->resX, CONFIG->resY, refreshRate, newMon->m_name);
                 }
             } else if (g_activeResX > 0 && g_activeResY > 0 && g_originalMonitorRule.has_value()) {
-                auto cmd = buildMonitorCommand(newMon->m_name, (int)g_originalMonitorRule->m_resolution.x, (int)g_originalMonitorRule->m_resolution.y,
-                                                g_originalMonitorRule->m_refreshRate, g_originalMonitorRule->m_offset, g_originalMonitorRule->m_scale);
-                HyprlandAPI::invokeHyprctlCommand("keyword", "monitor " + cmd);
-                Log::logger->log(Log::INFO, "[hyprvibr] Restored monitor {}", newMon->m_name);
+                Config::monitorRuleMgr()->add(std::move(g_originalMonitorRule.value()));
+                Log::logger->log(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
                 g_originalMonitorRule.reset();
             }
         }
@@ -160,45 +267,53 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         onActiveWindowChange(Desktop::focusState()->window());
     });
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    HyprlandAPI::addConfigKeyword(
-        PHANDLE, "hyprvibr-app",
-        [](const char* l, const char* r) -> Hyprlang::CParseResult {
-            const std::string      str = r;
-            CConstVarList          data(str, 0, ',', true);
+    if (Config::mgr()->type() == Config::CONFIG_LEGACY) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            HyprlandAPI::addConfigKeyword(
+                PHANDLE, "hyprvibr-app",
+                [](const char* l, const char* r) -> Hyprlang::CParseResult {
+                    const std::string      str = r;
+                    CConstVarList          data(str, 0, ',', true);
 
-            Hyprlang::CParseResult result;
+                    Hyprlang::CParseResult result;
 
-            if (data.size() < 2 || data.size() > 5) {
-                result.setError("hyprvibr-app requires 2-5 params: class,sat[,resX,resY[,refreshRate]]");
-                return result;
-            }
+                    if (data.size() < 2 || data.size() > 5) {
+                        result.setError("hyprvibr-app requires 2-5 params: class,sat[,resX,resY[,refreshRate]]");
+                        return result;
+                    }
 
-            try {
-                SAppConfig config;
-                config.szClass = data[0];
-                config.sat = std::stof(std::string{data[1]});
+                    try {
+                        SAppConfig config;
+                        config.szClass = data[0];
+                        config.sat = std::stof(std::string{data[1]});
 
-                if (data.size() >= 4) {
-                    config.resX = std::stoi(std::string{data[2]});
-                    config.resY = std::stoi(std::string{data[3]});
-                }
+                        if (data.size() >= 4) {
+                            config.resX = std::stoi(std::string{data[2]});
+                            config.resY = std::stoi(std::string{data[3]});
+                        }
 
-                if (data.size() >= 5) {
-                    config.refreshRate = std::stof(std::string{data[4]});
-                }
+                        if (data.size() >= 5) {
+                            config.refreshRate = std::stof(std::string{data[4]});
+                        }
 
-                g_appConfigs.emplace_back(std::move(config));
-            } catch (std::exception& e) {
-                result.setError("failed to parse line");
-                return result;
-            }
+                        pushAppConfig(config);
+                    } catch (std::exception& e) {
+                        result.setError("failed to parse line");
+                        return result;
+                    }
 
-            return result;
-        },
-        Hyprlang::SHandlerOptions{});
-#pragma GCC diagnostic pop
+                    return result;
+                },
+                Hyprlang::SHandlerOptions{});
+        #pragma GCC diagnostic pop
+    } else if (Config::mgr()->type() == Config::CONFIG_LUA) {
+        HyprlandAPI::addLuaFunction(PHANDLE, "hyprvibr", "hyprvibr_app", ::luaAddApp);
+    } else {
+        HyprlandAPI::addNotification(PHANDLE, "[hyprvibr] Failure in initialization: Unrecognized Hyprland configuration type",
+                                     CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        throw std::runtime_error("[hyprvibr] Unsupported Hyprland configuration type");
+    }
 
     HyprlandAPI::addNotification(PHANDLE, "Hyprvibr loaded", CHyprColor{0.2, 1.0, 0.2, 1.0}, 5000);
     return {"hyprvibr", "A plugin to customize monitor saturation per focused window", "devcexx", "1.0"};
