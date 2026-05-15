@@ -267,6 +267,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         onActiveWindowChange(Desktop::focusState()->window());
     });
 
+    static auto P4 = Event::bus()->m_events.window.destroy.listen([](PHLWINDOW WIN) {
+        onActiveWindowChange(Desktop::focusState()->window());
+    });
+
     if (Config::mgr()->type() == Config::CONFIG_LEGACY) {
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
