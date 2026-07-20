@@ -2,7 +2,6 @@
 #include <hyprland/src/SharedDefs.hpp>
 #include <hyprland/src/debug/log/Logger.hpp>
 #include <hyprland/src/desktop/DesktopTypes.hpp>
-#include <hyprland/src/helpers/Monitor.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/protocols/core/Compositor.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
@@ -267,7 +266,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         onActiveWindowChange(Desktop::focusState()->window());
     });
 
-    static auto P4 = Event::bus()->m_events.window.destroy.listen([](PHLWINDOW WIN) {
+    static auto P4 = Event::bus()->m_events.window.destroy.listen([](PHLWINDOWREF WIN) {
         onActiveWindowChange(Desktop::focusState()->window());
     });
 
