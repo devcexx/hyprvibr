@@ -8,19 +8,6 @@ the original settings when the window is no longer focused.
 
 ## Configuration
 
-Using legacy Hyprland configuration mode:
-
-```
-plugin {
-    hyprvibr {
-      hyprvibr-app = <app initial class>, <saturation value>
-      hyprvibr-app = <app initial class>, <saturation value>, <width>, <height>
-      hyprvibr-app = <app initial class>, <saturation value>, <width>, <height>, <refresh rate>
-      hyprvibr-app = ...
-    }
-}
-```
-
 Using Hyprland Lua configuration:
 
 ```lua
@@ -39,23 +26,6 @@ hl.plugin.hyprvibr.hyprvibr_app({
 ```
 
 ### Examples
-
-Using legacy Hyprland configuration mode:
-
-```
-plugin {
-    hyprvibr {
-      # Just saturation
-      hyprvibr-app = cs2, 3.3
-
-      # Saturation + resolution
-      hyprvibr-app = cs2, 1.5, 1920, 1080
-
-      # Saturation + resolution + refresh rate
-      hyprvibr-app = cs2, 1.2, 2560, 1440, 144
-    }
-}
-```
 
 Using Hyprland Lua configuration:
 
