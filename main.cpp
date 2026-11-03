@@ -62,17 +62,17 @@ const Mat3x3 calc_ctm_matrix(float sat) {
 }
 
 static void pushAppConfig(SAppConfig cfg) {
-    Log::logger->log(Log::INFO, "[hyprvibr] Configuration added for class {}: sat {}, res {}x{}@{}", cfg.szClass, cfg.sat, cfg.resX, cfg.resY, cfg.refreshRate);
+    LOG(Log::INFO, "[hyprvibr] Configuration added for class {}: sat {}, res {}x{}@{}", cfg.szClass, cfg.sat, cfg.resX, cfg.resY, cfg.refreshRate);
     g_appConfigs.emplace_back(std::move(cfg));
 }
 
 static int fillLuaMonitorMode(lua_State* L, SAppConfig& config) {
     if (!lua_istable(L, -1)) {
-        Log::logger->log(Log::ERR, "[hyprvibr] Is not a table");
+        LOG(Log::ERR, "[hyprvibr] Is not a table");
         return Config::Lua::Bindings::Internal::configError(L, "hyprvibr_app: 'monitor' field, if specified, must be a table");
     }
 
-    Log::logger->log(Log::ERR, "[hyprvibr] Type: {}", lua_type(L, 1));
+    LOG(Log::ERR, "[hyprvibr] Type: {}", lua_type(L, 1));
 
     {
         Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
@@ -157,7 +157,7 @@ static int luaAddApp(lua_State* L) {
         Hyprutils::Utils::CScopeGuard x([L] { lua_pop(L, 1); });
         lua_getfield(L, 1, "monitor_mode");
         if (!lua_isnil(L, -1)) {
-            Log::logger->log(Log::ERR, "[hyprvibr] Monitor mode is not nil");
+            LOG(Log::ERR, "[hyprvibr] Monitor mode is not nil");
             if ((r = fillLuaMonitorMode(L, config)) != 0)
                 return r;
         }
@@ -169,9 +169,9 @@ static int luaAddApp(lua_State* L) {
 
 void onActiveWindowChange(const PHLWINDOW win) {
     if (win) {
-        Log::logger->log(Log::TRACE, "[hyprvibr] Active window change: {} ({})", win->metadata().title(), win->metadata().initialAppID());
+        LOG(Log::TRACE, "[hyprvibr] Active window change: {} ({})", win->metadata().title(), win->metadata().initialAppID());
     } else {
-        Log::logger->log(Log::TRACE, "[hyprvibr] No active window");
+        LOG(Log::TRACE, "[hyprvibr] No active window");
     }
     const auto CONFIG = win ? getAppConfig(win->metadata().initialAppID()) : nullptr;
     auto prevMon = g_activeMonitor.lock();
@@ -200,7 +200,7 @@ void onActiveWindowChange(const PHLWINDOW win) {
 
             if (g_originalMonitorRule.has_value()) {
                 Config::monitorRuleMgr()->add(std::move(g_originalMonitorRule.value()));
-                Log::logger->log(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
+                LOG(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
                 g_originalMonitorRule.reset();
             }
         }
@@ -224,11 +224,11 @@ void onActiveWindowChange(const PHLWINDOW win) {
                     newRule.m_resolution = Vector2D((float)CONFIG->resX, (float)CONFIG->resY);
                     newRule.m_refreshRate = refreshRate;
                     Config::monitorRuleMgr()->add(std::move(newRule));
-                    Log::logger->log(Log::INFO, "[hyprvibr] Scheduled monitor resolution change to {}x{}@{} on {}", CONFIG->resX, CONFIG->resY, refreshRate, newMon->m_name);
+                    LOG(Log::INFO, "[hyprvibr] Scheduled monitor resolution change to {}x{}@{} on {}", CONFIG->resX, CONFIG->resY, refreshRate, newMon->m_name);
                 }
             } else if (g_activeResX > 0 && g_activeResY > 0 && g_originalMonitorRule.has_value()) {
                 Config::monitorRuleMgr()->add(std::move(g_originalMonitorRule.value()));
-                Log::logger->log(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
+                LOG(Log::INFO, "[hyprvibr] Restored monitor {}", prevMon->m_name);
                 g_originalMonitorRule.reset();
             }
         }
